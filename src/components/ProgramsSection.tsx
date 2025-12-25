@@ -16,7 +16,7 @@ const journeyItems = [
     link: "/training",
   },
   {
-    title: "建站挑戰",
+    title: "ETH 即時價格",
     description: "從零開始打造這個網站的過程",
     image: training2,
     icon: Code,
