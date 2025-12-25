@@ -1,23 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  createChart,
-  CandlestickSeries,
-  LineSeries,
-  createSeriesMarkers,
-  CandlestickData,
-  UTCTimestamp,
-  IChartApi,
-  ISeriesApi,
-  SeriesMarker,
-} from "lightweight-charts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createChart, CandlestickSeries, LineSeries, UTCTimestamp } from "lightweight-charts";
 
-/* ===================== config ===================== */
 type Interval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
-const AUTO_REFRESH_MS = 30_000;
-const TRAINING_LS_KEY = "xiannn_training_logs_v1";
-
-/* ===================== utils ===================== */
+const ENDPOINTS = [
+  "https://api.binance.com",
+  "https://api1.binance.com",
+  "https://api2.binance.com",
+  "https://api3.binance.com",
+  "https://data-api.binance.vision", // 備援節點
+];
 
 function intervalToLimit(interval: Interval) {
   if (interval === "1m") return 300;
@@ -28,87 +20,87 @@ function intervalToLimit(interval: Interval) {
   return 365;
 }
 
-function calcMA(data: CandlestickData[], period: number) {
+type KlineRow = [number, string, string, string, string]; // openTime, open, high, low, close
+
+function calcMA(
+  candles: { time: UTCTimestamp; close: number }[],
+  period: number
+) {
   const out: { time: UTCTimestamp; value: number }[] = [];
-  for (let i = 0; i < data.length; i++) {
+  for (let i = 0; i < candles.length; i++) {
     if (i < period - 1) continue;
     let sum = 0;
-    for (let j = i - period + 1; j <= i; j++) sum += data[j].close;
-    out.push({ time: data[i].time as UTCTimestamp, value: sum / period });
+    for (let j = i - period + 1; j <= i; j++) sum += candles[j].close;
+    out.push({ time: candles[i].time, value: sum / period });
   }
   return out;
 }
 
-function loadTrainingMarkers(): SeriesMarker<UTCTimestamp>[] {
-  try {
-    const raw = localStorage.getItem(TRAINING_LS_KEY);
-    if (!raw) return [];
-    const logs = JSON.parse(raw) as Array<{ date: string; title?: string }>;
-    if (!Array.isArray(logs)) return [];
+async function fetchWithFailover(urlPath: string, signal: AbortSignal) {
+  // 8 秒超時：iPhone 上很重要
+  const timeout = 8000;
 
-    return logs
-      .filter((x) => x?.date)
-      .map((x) => ({
-        time: Math.floor(new Date(`${x.date}T00:00:00Z`).getTime() / 1000) as UTCTimestamp,
-        position: "belowBar",
-        shape: "circle",
-        color: "#38bdf8",
-        text: "訓練",
-      }));
-  } catch {
-    return [];
+  for (const base of ENDPOINTS) {
+    const controller = new AbortController();
+    const t = window.setTimeout(() => controller.abort(), timeout);
+
+    try {
+      // 如果外層已 abort，就直接丟出
+      if (signal.aborted) throw new DOMException("aborted", "AbortError");
+
+      // 把外層 abort 也串到內層
+      const onAbort = () => controller.abort();
+      signal.addEventListener("abort", onAbort, { once: true });
+
+      const res = await fetch(`${base}${urlPath}`, {
+        method: "GET",
+        signal: controller.signal,
+        cache: "no-store",
+      });
+
+      signal.removeEventListener("abort", onAbort);
+      window.clearTimeout(t);
+
+      if (!res.ok) {
+        // 429/418/5xx 都算失敗，換節點
+        continue;
+      }
+
+      return await res.json();
+    } catch {
+      window.clearTimeout(t);
+      // 失敗換下一個節點
+      continue;
+    }
   }
+
+  throw new Error("Load failed（Binance 連線不穩或被限制）");
 }
-
-function getMACrossSignal(
-  ma20: { value: number }[],
-  ma60: { value: number }[]
-) {
-  if (ma20.length < 2 || ma60.length < 2) return "";
-  const a1 = ma20[ma20.length - 2].value;
-  const a2 = ma20[ma20.length - 1].value;
-  const b1 = ma60[ma60.length - 2].value;
-  const b2 = ma60[ma60.length - 1].value;
-
-  const prev = a1 - b1;
-  const now = a2 - b2;
-
-  if (prev <= 0 && now > 0) return "MA20 上穿 MA60（偏多轉強）";
-  if (prev >= 0 && now < 0) return "MA20 下穿 MA60（偏空轉弱）";
-  return "";
-}
-
-/* ===================== component ===================== */
 
 export default function EthKlineChart() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
 
-  const chartRef = useRef<IChartApi | null>(null);
-  const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const ma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const ma60Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const markersRef = useRef<ReturnType<typeof createSeriesMarkers> | null>(null);
+  const candleRef = useRef<ReturnType<ReturnType<typeof createChart>["addSeries"]> | null>(null);
+  const ma20Ref = useRef<ReturnType<ReturnType<typeof createChart>["addSeries"]> | null>(null);
+  const ma60Ref = useRef<ReturnType<ReturnType<typeof createChart>["addSeries"]> | null>(null);
 
   const [interval, setInterval] = useState<Interval>("1h");
   const [error, setError] = useState("");
-  const [signal, setSignal] = useState("");
-  const [chartReady, setChartReady] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const hasLoadedOnceRef = useRef(false);
-  const loadingRef = useRef(false);
+  const cacheKey = useMemo(() => `xiannn_eth_klines_${interval}_v1`, [interval]);
 
-  /* ---------- init chart ---------- */
+  // init chart once
   useEffect(() => {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
-      width: containerRef.current.clientWidth,
       height: 380,
       layout: { background: { color: "transparent" }, textColor: "#cbd5e1" },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false },
-      crosshair: { vertLine: { visible: true }, horzLine: { visible: true } },
     });
 
     const candles = chart.addSeries(CandlestickSeries, {
@@ -122,15 +114,10 @@ export default function EthKlineChart() {
     const ma20 = chart.addSeries(LineSeries, { color: "#f59e0b", lineWidth: 2 });
     const ma60 = chart.addSeries(LineSeries, { color: "#a78bfa", lineWidth: 2 });
 
-    const markers = createSeriesMarkers(candles);
-
     chartRef.current = chart;
     candleRef.current = candles;
     ma20Ref.current = ma20;
     ma60Ref.current = ma60;
-    markersRef.current = markers;
-
-    setChartReady(true);
 
     const ro = new ResizeObserver(() => {
       if (!containerRef.current) return;
@@ -141,98 +128,88 @@ export default function EthKlineChart() {
     return () => {
       ro.disconnect();
       chart.remove();
-      setChartReady(false);
+      chartRef.current = null;
+      candleRef.current = null;
+      ma20Ref.current = null;
+      ma60Ref.current = null;
     };
   }, []);
 
-  /* ---------- load data via Pages Function ---------- */
-  const loadData = async () => {
-    if (!chartReady || !candleRef.current) return;
-    if (loadingRef.current) return; // 避免 interval + timer 同時打
-    loadingRef.current = true;
+  // load data (no auto refresh — 先穩)
+  useEffect(() => {
+    if (!chartRef.current || !candleRef.current) return;
 
-    try {
-      const limit = intervalToLimit(interval);
-      const url = `/api/klines?symbol=ETHUSDT&interval=${interval}&limit=${limit}`;
+    const ac = new AbortController();
 
-      const controller = new AbortController();
-      const t = window.setTimeout(() => controller.abort(), 10_000);
+    async function load() {
+      setLoading(true);
+      setError("");
 
-      const res = await fetch(url, { signal: controller.signal });
-      window.clearTimeout(t);
+      // 先用快取畫一版（避免空白）
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const rows = JSON.parse(cached) as KlineRow[];
+          applyRows(rows);
+        }
+      } catch {}
 
-      if (!res.ok) throw new Error("Load failed");
+      try {
+        const limit = intervalToLimit(interval);
+        const rows = (await fetchWithFailover(
+          `/api/v3/klines?symbol=ETHUSDT&interval=${interval}&limit=${limit}`,
+          ac.signal
+        )) as any[];
 
-      const rows = await res.json();
-      if (!Array.isArray(rows) || rows.length === 0) throw new Error("Load failed");
+        // 保存快取（iPhone 很有用）
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(rows));
+        } catch {}
 
-      const candles: CandlestickData[] = rows.map((r: any) => ({
+        applyRows(rows);
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
+        setError(e?.message ?? "Load failed");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function applyRows(rows: any[]) {
+      if (!candleRef.current || !chartRef.current) return;
+
+      const candles = rows.map((r: any) => ({
         time: Math.floor(r[0] / 1000) as UTCTimestamp,
-        open: +r[1],
-        high: +r[2],
-        low: +r[3],
-        close: +r[4],
+        open: Number(r[1]),
+        high: Number(r[2]),
+        low: Number(r[3]),
+        close: Number(r[4]),
       }));
 
       candleRef.current.setData(candles);
 
-      const ma20 = calcMA(candles, 20);
-      const ma60 = calcMA(candles, 60);
-      ma20Ref.current?.setData(ma20);
-      ma60Ref.current?.setData(ma60);
+      const closeSeries = candles.map((c: any) => ({ time: c.time, close: c.close }));
+      ma20Ref.current?.setData(calcMA(closeSeries, 20));
+      ma60Ref.current?.setData(calcMA(closeSeries, 60));
 
-      markersRef.current?.setMarkers(loadTrainingMarkers());
-
-      const sig = getMACrossSignal(ma20, ma60);
-      setSignal(sig);
-
-      chartRef.current?.timeScale().fitContent();
-
-      hasLoadedOnceRef.current = true;
-      setError("");
-    } catch (e) {
-      // 只有「從來沒成功載入」才顯示 error（避免閃爍）
-      if (!hasLoadedOnceRef.current) setError("Load failed");
-    } finally {
-      loadingRef.current = false;
+      chartRef.current.timeScale().fitContent();
     }
-  };
 
-  /* ---------- effects ---------- */
-  useEffect(() => {
-    if (!chartReady) return;
-    setError("");
-    setSignal("");
-    hasLoadedOnceRef.current = false;
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartReady, interval]);
-
-  useEffect(() => {
-    if (!chartReady) return;
-    const timer = window.setInterval(loadData, AUTO_REFRESH_MS);
-    return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartReady, interval]);
-
-  /* ===================== UI ===================== */
+    load();
+    return () => ac.abort();
+  }, [interval, cacheKey]);
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm text-muted-foreground">ETH / USDT</div>
-          <div className="text-xs text-muted-foreground">
-            MA20（橙）/ MA60（紫）｜🔵 訓練日（localStorage）｜30 秒更新
-          </div>
-        </div>
+        <span className="text-sm text-muted-foreground">ETH / USDT · MA20 / MA60</span>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto">
           {(["1m", "5m", "15m", "1h", "4h", "1d"] as Interval[]).map((x) => (
             <button
               key={x}
               onClick={() => setInterval(x)}
-              className={`px-3 py-1 text-sm rounded-md border transition-colors ${
+              className={`px-3 py-1 text-sm rounded-md border transition-colors whitespace-nowrap ${
                 interval === x
                   ? "bg-primary/20 text-primary border-primary/30"
                   : "bg-card/40 border-border/60 text-muted-foreground hover:text-foreground"
@@ -245,15 +222,13 @@ export default function EthKlineChart() {
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card/50 p-3">
-        {signal && <div className="text-xs text-primary mb-2">📌 {signal}</div>}
         {error && <div className="text-sm text-red-400 mb-2">{error}</div>}
-
-        {/* iPhone / Safari 最穩：直接給高度 */}
-        <div ref={containerRef} style={{ width: "100%", height: 380 }} />
+        {loading && !error && <div className="text-xs text-muted-foreground mb-2">Loading...</div>}
+        <div ref={containerRef} className="w-full" />
       </div>
 
       <p className="text-xs text-muted-foreground">
-        訊號為「教育用途提示」，不構成投資建議。
+        橙 = MA20｜紫 = MA60｜資料來源：Binance 公開 API（前端直連，已做多節點備援與快取）
       </p>
     </div>
   );
