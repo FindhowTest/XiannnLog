@@ -3,32 +3,41 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
-    <title>健身紀錄（Build in Public）</title>
-    <meta name="description" content="從 0 記錄健身、學習與建站的過程。" />
-    <meta name="author" content="Lovable" />
 
-    <!-- TODO: Update og:title to match your application name -->
-    <meta property="og:title" content="健身紀錄（Build in Public" />
+    <title>健身紀錄｜Xiannn（Build in Public）</title>
+    <meta name="description" content="從 0 開始記錄健身訓練、學習與建站的過程。" />
+    <meta name="author" content="Xiannn" />
+
+    <!-- Open Graph（LINE / Facebook） -->
+    <meta property="og:title" content="健身紀錄｜Xiannn" />
     <meta property="og:description" content="從 0 記錄健身、學習與建站的過程。" />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://xiannnlog.pages.dev/" />
+    <meta property="og:image" content="https://xiannnlog.pages.dev/icons/pwa-512.png" />
 
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="Xiannn" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:title" content="健身紀錄｜Xiannn" />
+    <meta name="twitter:description" content="從 0 記錄健身、學習與建站的過程。" />
+    <meta name="twitter:image" content="https://xiannnlog.pages.dev/icons/pwa-512.png" />
+
+    <!-- PWA -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#ff6a00" />
 
-    <!-- iOS 支援 -->
+    <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="XiannnLog" />
-    <link rel="apple-touch-icon" href="/icons/pwa-192.png" />
 
+    <!-- ⚠️ 關鍵：apple-touch-icon（建議換檔名避免快取） -->
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/pwa-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/pwa-512.png" />
 </head>
 
-  <body>
+
+<body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-  </body>
+</body>
 </html>
