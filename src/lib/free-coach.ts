@@ -7,13 +7,13 @@ export type Log = {
 };
 
 const PARTS = [
-    { key: "chest", label: "¯İ", kws: ["¯İ", "bench", "ª×±À", "¤W±×", "­¸³¾"] },
-    { key: "back", label: "­I", kws: ["­I", "¦E²î", "¤U©Ô", "¤ŞÅé", "©Ô"] },
-    { key: "legs", label: "»L", kws: ["»L", "²`ÃÛ", "µwÁ|", "»L±À", "¤}½b¨B", "»L©}¦ù"] },
-    { key: "shoulder", label: "ªÓ", kws: ["ªÓ", "±ÀÁ|", "°¼¥­Á|", "«á¤T¨¤", "ªÓ±À"] },
-    { key: "arms", label: "¤â", kws: ["¤GÀY", "¤TÀY", "ÅsÁ|", "¤UÀ£", "ºl¦¡"] },
-    { key: "core", label: "®Ö¤ß", kws: ["®Ö¤ß", "¸¡", "´Î¦¡", "¨÷¸¡", "°¼´Î¦¡"] },
-    { key: "cardio", label: "¦³®ñ", kws: ["¶]", "ºC¶]", "­¸½ü", "¦E²î¾÷", "HIIT", "¨«¸ô"] },
+    { key: "chest", label: "èƒ¸", kws: ["èƒ¸", "bench", "è‡¥æ¨", "ä¸Šæ–œ", "é£›é³¥"] },
+    { key: "back", label: "èƒŒ", kws: ["èƒŒ", "åˆ’èˆ¹", "ä¸‹æ‹‰", "å¼•é«”", "æ‹‰"] },
+    { key: "legs", label: "è…¿", kws: ["è…¿", "æ·±è¹²", "ç¡¬èˆ‰", "è…¿æ¨", "å¼“ç®­æ­¥", "è…¿å±ˆä¼¸"] },
+    { key: "shoulder", label: "è‚©", kws: ["è‚©", "æ¨èˆ‰", "å´å¹³èˆ‰", "å¾Œä¸‰è§’", "è‚©æ¨"] },
+    { key: "arms", label: "æ‰‹", kws: ["äºŒé ­", "ä¸‰é ­", "å½èˆ‰", "ä¸‹å£“", "æ§Œå¼"] },
+    { key: "core", label: "æ ¸å¿ƒ", kws: ["æ ¸å¿ƒ", "è…¹", "æ£’å¼", "å·è…¹", "å´æ£’å¼"] },
+    { key: "cardio", label: "æœ‰æ°§", kws: ["è·‘", "æ…¢è·‘", "é£›è¼ª", "åˆ’èˆ¹æ©Ÿ", "HIIT", "èµ°è·¯"] },
 ] as const;
 
 function includesAny(text: string, kws: readonly string[]) {
@@ -22,7 +22,7 @@ function includesAny(text: string, kws: readonly string[]) {
 }
 
 function weekStartISO(date: Date) {
-    // ¥H¶g¤@¬°¤@¶g°_ÂI
+    // ä»¥é€±ä¸€ç‚ºä¸€é€±èµ·é»
     const d = new Date(date);
     const day = d.getDay(); // 0=Sun
     const diff = day === 0 ? -6 : 1 - day;
@@ -32,7 +32,7 @@ function weekStartISO(date: Date) {
 }
 
 export function analyzeLogsFree(all: Log[]) {
-    // ¥u¬İ³Ìªñ 30 µ§
+    // åªçœ‹æœ€è¿‘ 30 ç­†
     const logs = [...all]
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 30);
@@ -53,7 +53,7 @@ export function analyzeLogsFree(all: Log[]) {
         }
     }
 
-    const fatigueWords = ["²Ö", "µh", "¯h³Ò", "ºÎ¤£¦n", "¨S¤O", "µm", "¤£µÎªA", "ºò"];
+    const fatigueWords = ["ç´¯", "ç—›", "ç–²å‹", "ç¡ä¸å¥½", "æ²’åŠ›", "ç— ", "ä¸èˆ’æœ", "ç·Š"];
     const fatigueHits = inWeek.filter((x) => includesAny(x.feeling ?? "", fatigueWords)).length;
 
     const sortedParts = [...PARTS]
@@ -61,35 +61,35 @@ export function analyzeLogsFree(all: Log[]) {
         .sort((a, b) => b.n - a.n);
 
     const top = sortedParts[0];
-    const low = sortedParts.slice(-2).reverse(); // low[0] ³Ì®z
+    const low = sortedParts.slice(-2).reverse(); // low[0] æœ€å¼±
 
     const summary = [
-        `¥»¶g°V½m¡G${totalSessions} ¦¸¡]¶g°_ÂI¡G${wk}¡^`,
-        `³¡¦ì¤À¥¬¡G${sortedParts.some((x) => x.n > 0)
-            ? sortedParts.filter((x) => x.n > 0).map((x) => `${x.label}¡Ñ${x.n}`).join("¡B")
-            : "¡]©|¥¼¿ëÃÑ¨ì³¡¦ì¡A«ØÄ³¦b¼ĞÃD/¤º®e¥[¤W¯İ­I»Lµ¥ÃöÁä¦r¡^"
+        `æœ¬é€±è¨“ç·´ï¼š${totalSessions} æ¬¡ï¼ˆé€±èµ·é»ï¼š${wk}ï¼‰`,
+        `éƒ¨ä½åˆ†å¸ƒï¼š${sortedParts.some((x) => x.n > 0)
+            ? sortedParts.filter((x) => x.n > 0).map((x) => `${x.label}Ã—${x.n}`).join("ã€")
+            : "ï¼ˆå°šæœªè¾¨è­˜åˆ°éƒ¨ä½ï¼Œå»ºè­°åœ¨æ¨™é¡Œ/å…§å®¹åŠ ä¸Šèƒ¸èƒŒè…¿ç­‰é—œéµå­—ï¼‰"
         }`,
-        fatigueHits ? `¯h³Ò°T¸¹¡G${fatigueHits} ¦¸¡]«ØÄ³­°¶q/¦­ºÎ/¦ù®i/¸É¤ô¡^` : `¯h³Ò°T¸¹¡G¤Ö¡]¥iºû«ù°V½m¡^`,
+        fatigueHits ? `ç–²å‹è¨Šè™Ÿï¼š${fatigueHits} æ¬¡ï¼ˆå»ºè­°é™é‡/æ—©ç¡/ä¼¸å±•/è£œæ°´ï¼‰` : `ç–²å‹è¨Šè™Ÿï¼šå°‘ï¼ˆå¯ç¶­æŒè¨“ç·´ï¼‰`,
     ];
 
     const nextWeekPlan = [
-        low?.[0]?.label ? `Day 1¡G${low[0].label}¡]¸É®z¶µ¡^¡Ï®Ö¤ß 10 ¤À` : `Day 1¡G®z¶µ¸É±j¡Ï®Ö¤ß`,
-        top?.label ? `Day 2¡G${top.label}¡]ºû«ù±j¶µ¡^¡Ï¦³®ñ 10¡V15 ¤À` : `Day 2¡G¥D¤O³¡¦ì¡Ï¦³®ñ`,
-        low?.[1]?.label ? `Day 3¡G${low[1].label}¡]¸É®z¶µ¡^¡Ï¦ù®i/©ñÃP` : `Day 3¡G¸É±j¡Ï¦ù®i/©ñÃP`,
+        low?.[0]?.label ? `Day 1ï¼š${low[0].label}ï¼ˆè£œå¼±é …ï¼‰ï¼‹æ ¸å¿ƒ 10 åˆ†` : `Day 1ï¼šå¼±é …è£œå¼·ï¼‹æ ¸å¿ƒ`,
+        top?.label ? `Day 2ï¼š${top.label}ï¼ˆç¶­æŒå¼·é …ï¼‰ï¼‹æœ‰æ°§ 10â€“15 åˆ†` : `Day 2ï¼šä¸»åŠ›éƒ¨ä½ï¼‹æœ‰æ°§`,
+        low?.[1]?.label ? `Day 3ï¼š${low[1].label}ï¼ˆè£œå¼±é …ï¼‰ï¼‹ä¼¸å±•/æ”¾é¬†` : `Day 3ï¼šè£œå¼·ï¼‹ä¼¸å±•/æ”¾é¬†`,
     ];
 
     const igCaption = [
-        `¥»¶g°V½m ${totalSessions} ¤Ñ¡A`,
-        top?.label ? `¥D¥´ ${top.label}¡A` : "",
-        low?.[0]?.label ? `¤U¶g­n¸É ${low[0].label}¡C` : "",
-        fatigueHits ? `ª¬ºA¦³ÂI²Ö¡A¦ı§ÚÁÙ¬O§¹¦¨¤F¡C` : `ª¬ºA¤£¿ù¡AÃ­©w±À¶i¡C`,
-        `\n\n#°·¨­¬ö¿ı #BuildInPublic #XiannnLog`,
+        `æœ¬é€±è¨“ç·´ ${totalSessions} å¤©ï¼Œ`,
+        top?.label ? `ä¸»æ‰“ ${top.label}ï¼Œ` : "",
+        low?.[0]?.label ? `ä¸‹é€±è¦è£œ ${low[0].label}ã€‚` : "",
+        fatigueHits ? `ç‹€æ…‹æœ‰é»ç´¯ï¼Œä½†æˆ‘é‚„æ˜¯å®Œæˆäº†ã€‚` : `ç‹€æ…‹ä¸éŒ¯ï¼Œç©©å®šæ¨é€²ã€‚`,
+        `\n\n#å¥èº«ç´€éŒ„ #BuildInPublic #XiannnLog`,
     ].join("");
 
     return {
         weekStart: wk,
         totalSessions,
-        counts: sortedParts, // µ¹§A¥¼¨Ó°µ¹Ïªí¥Î
+        counts: sortedParts, // çµ¦ä½ æœªä¾†åšåœ–è¡¨ç”¨
         summary,
         nextWeekPlan,
         igCaption,
