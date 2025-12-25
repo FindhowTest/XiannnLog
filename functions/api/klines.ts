@@ -14,27 +14,27 @@ export const onRequestGet = async ({ request }: { request: Request }) => {
   }
 
   const endpoints = [
-    "https://data.binance.com",
     "https://api.binance.com",
-    "https://api.binance.us",
+    "https://data-api.binance.vision",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
   ];
 
   for (const base of endpoints) {
     try {
       const upstream = `${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
       const res = await fetch(upstream);
-
       if (!res.ok) continue;
 
-      return new Response(await res.text(), {
+      const body = await res.text();
+      return new Response(body, {
         headers: {
           "content-type": "application/json; charset=utf-8",
           "cache-control": "public, max-age=10",
         },
       });
-    } catch {
-      // try next endpoint
-    }
+    } catch {}
   }
 
   return new Response(JSON.stringify({ error: "upstream failed" }), {
