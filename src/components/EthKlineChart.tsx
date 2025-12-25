@@ -146,7 +146,7 @@ export default function EthKlineChart() {
       setError("");
 
       const limit = intervalToLimit(interval);
-      const url = `https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=${interval}&limit=${limit}`;
+const url = `https://data.binance.com/api/v3/klines?symbol=ETHUSDT&interval=${interval}&limit=${limit}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("Binance API 連線失敗");
 
