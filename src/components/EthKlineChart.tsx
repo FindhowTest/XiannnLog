@@ -18,6 +18,13 @@ type Interval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 const AUTO_REFRESH_MS = 30_000;
 const TRAINING_LS_KEY = "xiannn_training_logs_v1";
 
+/* Binance API fallback（非常重要） */
+const BINANCE_ENDPOINTS = [
+  "https://data.binance.com",
+  "https://api.binance.com",
+  "https://api.binance.us",
+];
+
 /* ===================== utils ===================== */
 
 function intervalToLimit(interval: Interval) {
@@ -30,16 +37,14 @@ function intervalToLimit(interval: Interval) {
 }
 
 function calcMA(data: CandlestickData[], period: number) {
-  const result: { time: UTCTimestamp; value: number }[] = [];
-
+  const out: { time: UTCTimestamp; value: number }[] = [];
   for (let i = 0; i < data.length; i++) {
     if (i < period - 1) continue;
     let sum = 0;
     for (let j = i - period + 1; j <= i; j++) sum += data[j].close;
-    result.push({ time: data[i].time as UTCTimestamp, value: sum / period });
+    out.push({ time: data[i].time as UTCTimestamp, value: sum / period });
   }
-
-  return result;
+  return out;
 }
 
 function loadTrainingMarkers(): SeriesMarker<UTCTimestamp>[] {
@@ -75,21 +80,17 @@ export default function EthKlineChart() {
   const [interval, setInterval] = useState<Interval>("1h");
   const [error, setError] = useState("");
   const [chartReady, setChartReady] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
 
-  /* ---------- init chart (once) ---------- */
+  /* ---------- init chart ---------- */
   useEffect(() => {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
+      width: containerRef.current.clientWidth, // ⭐ 關鍵
       height: 380,
-      layout: {
-        background: { color: "transparent" },
-        textColor: "#cbd5e1",
-      },
-      grid: {
-        vertLines: { visible: false },
-        horzLines: { visible: false },
-      },
+      layout: { background: { color: "transparent" }, textColor: "#cbd5e1" },
+      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false },
     });
@@ -102,16 +103,8 @@ export default function EthKlineChart() {
       borderVisible: false,
     });
 
-    const ma20 = chart.addSeries(LineSeries, {
-      color: "#f59e0b",
-      lineWidth: 2,
-    });
-
-    const ma60 = chart.addSeries(LineSeries, {
-      color: "#a78bfa",
-      lineWidth: 2,
-    });
-
+    const ma20 = chart.addSeries(LineSeries, { color: "#f59e0b", lineWidth: 2 });
+    const ma60 = chart.addSeries(LineSeries, { color: "#a78bfa", lineWidth: 2 });
     const markers = createSeriesMarkers(candles);
 
     chartRef.current = chart;
@@ -123,78 +116,78 @@ export default function EthKlineChart() {
     setChartReady(true);
 
     const ro = new ResizeObserver(() => {
-      if (!containerRef.current || !chartRef.current) return;
-      chartRef.current.applyOptions({
-        width: containerRef.current.clientWidth,
-      });
+      chart.applyOptions({ width: containerRef.current!.clientWidth });
     });
     ro.observe(containerRef.current);
 
     return () => {
       ro.disconnect();
       chart.remove();
-      chartRef.current = null;
       setChartReady(false);
     };
   }, []);
 
-  /* ---------- load data ---------- */
+  /* ---------- load data（含 fallback） ---------- */
   const loadData = async () => {
-    if (!chartReady || !candleRef.current || !chartRef.current) return;
+    if (!chartReady || !candleRef.current) return;
 
-    try {
-      setError("");
+    for (const base of BINANCE_ENDPOINTS) {
+      try {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 8000);
 
-      const limit = intervalToLimit(interval);
-const url = `https://data.binance.com/api/v3/klines?symbol=ETHUSDT&interval=${interval}&limit=${limit}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Binance API 連線失敗");
+        const limit = intervalToLimit(interval);
+        const url = `${base}/api/v3/klines?symbol=ETHUSDT&interval=${interval}&limit=${limit}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error("HTTP " + res.status);
 
-      const rows = await res.json();
+        const rows = await res.json();
+        if (!Array.isArray(rows)) throw new Error("invalid data");
 
-      const candles: CandlestickData[] = rows.map((r: any) => ({
-        time: Math.floor(r[0] / 1000) as UTCTimestamp,
-        open: +r[1],
-        high: +r[2],
-        low: +r[3],
-        close: +r[4],
-      }));
+        const candles: CandlestickData[] = rows.map((r: any) => ({
+          time: Math.floor(r[0] / 1000) as UTCTimestamp,
+          open: +r[1],
+          high: +r[2],
+          low: +r[3],
+          close: +r[4],
+        }));
 
-      candleRef.current.setData(candles);
-      ma20Ref.current?.setData(calcMA(candles, 20));
-      ma60Ref.current?.setData(calcMA(candles, 60));
-      markersRef.current?.setMarkers(loadTrainingMarkers());
+        candleRef.current.setData(candles);
+        ma20Ref.current?.setData(calcMA(candles, 20));
+        ma60Ref.current?.setData(calcMA(candles, 60));
+        markersRef.current?.setMarkers(loadTrainingMarkers());
 
-      chartRef.current.timeScale().fitContent();
-    } catch (e: any) {
-      setError(e?.message ?? "資料載入失敗");
+        chartRef.current?.timeScale().fitContent();
+        hasLoadedOnceRef.current = true;
+        setError("");
+        return;
+      } catch {
+        // try next endpoint
+      }
+    }
+
+    if (!hasLoadedOnceRef.current) {
+      setError("行情資料目前無法取得（Binance）");
     }
   };
 
   /* ---------- effects ---------- */
-
-  // chart ready or interval change → 立刻抓一次
   useEffect(() => {
     if (!chartReady) return;
     loadData();
   }, [interval, chartReady]);
 
-  // auto refresh（30 秒）
   useEffect(() => {
     if (!chartReady) return;
-
-    const timer = window.setInterval(() => {
-      loadData();
-    }, AUTO_REFRESH_MS);
-
-    return () => window.clearInterval(timer);
+    const timer = setInterval(loadData, AUTO_REFRESH_MS);
+    return () => clearInterval(timer);
   }, [interval, chartReady]);
 
   /* ===================== UI ===================== */
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <span className="text-sm text-muted-foreground">
           ETH / USDT · MA20 / MA60 · 訓練日
         </span>
@@ -204,10 +197,10 @@ const url = `https://data.binance.com/api/v3/klines?symbol=ETHUSDT&interval=${in
             <button
               key={x}
               onClick={() => setInterval(x)}
-              className={`px-3 py-1 text-sm rounded-md border transition-colors ${
+              className={`px-3 py-1 text-sm rounded-md border ${
                 interval === x
                   ? "bg-primary/20 text-primary border-primary/30"
-                  : "bg-card/40 border-border/60 text-muted-foreground hover:text-foreground"
+                  : "bg-card/40 border-border/60 text-muted-foreground"
               }`}
             >
               {x}
@@ -218,12 +211,8 @@ const url = `https://data.binance.com/api/v3/klines?symbol=ETHUSDT&interval=${in
 
       <div className="rounded-xl border border-border/60 bg-card/50 p-3">
         {error && <div className="text-sm text-red-400 mb-2">{error}</div>}
-        <div ref={containerRef} className="w-full" />
+        <div ref={containerRef} />
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        MA20（橙）/ MA60（紫）｜🔵 = 訓練日（localStorage）｜30 秒自動更新
-      </p>
     </div>
   );
 }
