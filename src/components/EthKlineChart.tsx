@@ -3,6 +3,7 @@ import {
   createChart,
   CandlestickSeries,
   LineSeries,
+  createSeriesMarkers,
   CandlestickData,
   UTCTimestamp,
   IChartApi,
@@ -13,6 +14,7 @@ import {
 /* ===================== config ===================== */
 
 type Interval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+
 const AUTO_REFRESH_MS = 30_000;
 const TRAINING_LS_KEY = "xiannn_training_logs_v1";
 
@@ -28,28 +30,30 @@ function intervalToLimit(interval: Interval) {
 }
 
 function calcMA(data: CandlestickData[], period: number) {
-  return data
-    .map((d, i) => {
-      if (i < period - 1) return null;
-      const slice = data.slice(i - period + 1, i + 1);
-      const avg =
-        slice.reduce((sum, x) => sum + x.close, 0) / period;
-      return { time: d.time, value: avg };
-    })
-    .filter(Boolean) as { time: UTCTimestamp; value: number }[];
+  const result: { time: UTCTimestamp; value: number }[] = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) continue;
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += data[j].close;
+    result.push({ time: data[i].time as UTCTimestamp, value: sum / period });
+  }
+
+  return result;
 }
 
 function loadTrainingMarkers(): SeriesMarker<UTCTimestamp>[] {
   try {
     const raw = localStorage.getItem(TRAINING_LS_KEY);
     if (!raw) return [];
-    const logs = JSON.parse(raw) as { date: string }[];
+    const logs = JSON.parse(raw) as Array<{ date: string }>;
+    if (!Array.isArray(logs)) return [];
 
     return logs.map((x) => ({
-      time: Math.floor(new Date(x.date).getTime() / 1000) as UTCTimestamp,
+      time: Math.floor(new Date(`${x.date}T00:00:00Z`).getTime() / 1000) as UTCTimestamp,
       position: "belowBar",
-      color: "#38bdf8",
       shape: "circle",
+      color: "#38bdf8",
       text: "訓練",
     }));
   } catch {
@@ -61,16 +65,18 @@ function loadTrainingMarkers(): SeriesMarker<UTCTimestamp>[] {
 
 export default function EthKlineChart() {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<IChartApi | null>(null);
 
+  const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const ma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
   const ma60Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const markersRef = useRef<ReturnType<typeof createSeriesMarkers> | null>(null);
 
   const [interval, setInterval] = useState<Interval>("1h");
   const [error, setError] = useState("");
+  const [chartReady, setChartReady] = useState(false);
 
-  /* ---------- init chart ---------- */
+  /* ---------- init chart (once) ---------- */
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -106,10 +112,15 @@ export default function EthKlineChart() {
       lineWidth: 2,
     });
 
+    const markers = createSeriesMarkers(candles);
+
     chartRef.current = chart;
     candleRef.current = candles;
     ma20Ref.current = ma20;
     ma60Ref.current = ma60;
+    markersRef.current = markers;
+
+    setChartReady(true);
 
     const ro = new ResizeObserver(() => {
       if (!containerRef.current || !chartRef.current) return;
@@ -123,15 +134,17 @@ export default function EthKlineChart() {
       ro.disconnect();
       chart.remove();
       chartRef.current = null;
+      setChartReady(false);
     };
   }, []);
 
   /* ---------- load data ---------- */
-  async function loadData() {
-    if (!candleRef.current || !chartRef.current) return;
+  const loadData = async () => {
+    if (!chartReady || !candleRef.current || !chartRef.current) return;
 
     try {
       setError("");
+
       const limit = intervalToLimit(interval);
       const url = `https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=${interval}&limit=${limit}`;
       const res = await fetch(url);
@@ -150,23 +163,32 @@ export default function EthKlineChart() {
       candleRef.current.setData(candles);
       ma20Ref.current?.setData(calcMA(candles, 20));
       ma60Ref.current?.setData(calcMA(candles, 60));
+      markersRef.current?.setMarkers(loadTrainingMarkers());
 
-      candleRef.current.setMarkers(loadTrainingMarkers());
       chartRef.current.timeScale().fitContent();
     } catch (e: any) {
       setError(e?.message ?? "資料載入失敗");
     }
-  }
+  };
 
   /* ---------- effects ---------- */
-  useEffect(() => {
-    loadData();
-  }, [interval]);
 
+  // chart ready or interval change → 立刻抓一次
   useEffect(() => {
-    const timer = setInterval(loadData, AUTO_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [interval]);
+    if (!chartReady) return;
+    loadData();
+  }, [interval, chartReady]);
+
+  // auto refresh（30 秒）
+  useEffect(() => {
+    if (!chartReady) return;
+
+    const timer = window.setInterval(() => {
+      loadData();
+    }, AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, [interval, chartReady]);
 
   /* ===================== UI ===================== */
 
@@ -195,14 +217,12 @@ export default function EthKlineChart() {
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card/50 p-3">
-        {error && (
-          <div className="text-sm text-red-400 mb-2">{error}</div>
-        )}
+        {error && <div className="text-sm text-red-400 mb-2">{error}</div>}
         <div ref={containerRef} className="w-full" />
       </div>
 
       <p className="text-xs text-muted-foreground">
-        MA20（橙）、MA60（紫）｜🔵 = 有訓練的日期（localStorage）
+        MA20（橙）/ MA60（紫）｜🔵 = 訓練日（localStorage）｜30 秒自動更新
       </p>
     </div>
   );
