@@ -6,7 +6,7 @@ const socialLinks = [
   {
     icon: Instagram,
     label: "Instagram",
-    href: "https://instagram.com",
+        href: "https://www.instagram.com/xiannn0119?igsh=d2Q5ZDdvNDFhOHN0&utm_source=qr",
     description: "追蹤我的健身日常",
     color: "from-pink-500 to-purple-500",
   },
@@ -112,7 +112,7 @@ const ContactSection = () => {
           transition={{ delay: 0.4, duration: 0.5 }}
         >
           <motion.a
-            href="https://instagram.com"
+            href="https://www.instagram.com/xiannn0119?igsh=d2Q5ZDdvNDFhOHN0&utm_source=qr"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-full shadow-glow text-lg"

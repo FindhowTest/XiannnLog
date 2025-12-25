@@ -20,7 +20,7 @@ const Footer = () => {
           {/* Social Links */}
           <div className="flex gap-4">
             {[
-              { icon: Instagram, href: "https://instagram.com" },
+              { icon: Instagram, href: "https://www.instagram.com/xiannn0119?igsh=d2Q5ZDdvNDFhOHN0&utm_source=qr" },
               { icon: Github, href: "https://github.com" },
               { icon: Mail, href: "mailto:hello@example.com" },
             ].map((social, index) => (

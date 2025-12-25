@@ -100,7 +100,7 @@ const HeroSection = () => {
             transition={{ duration: 0.6, delay: 0.9 }}
           >
             <motion.a
-              href="https://instagram.com"
+              href="https://www.instagram.com/xiannn0119?igsh=d2Q5ZDdvNDFhOHN0&utm_source=qr"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-lg shadow-glow"

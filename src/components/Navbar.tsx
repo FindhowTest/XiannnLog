@@ -70,7 +70,7 @@ const Navbar = () => {
               </motion.a>
             ))}
             <motion.a
-              href="https://instagram.com"
+              href="https://www.instagram.com/xiannn0119?igsh=d2Q5ZDdvNDFhOHN0&utm_source=qr"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-lg shadow-glow"
@@ -144,7 +144,7 @@ const Navbar = () => {
                   </motion.a>
                 ))}
                 <motion.a
-                  href="https://instagram.com"
+                  href="https://www.instagram.com/xiannn0119?igsh=d2Q5ZDdvNDFhOHN0&utm_source=qr"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold rounded-lg mt-2"
