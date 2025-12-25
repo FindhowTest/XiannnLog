@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { createChart, CandlestickData, UTCTimestamp } from "lightweight-charts";
+import {
+  createChart,
+  CandlestickSeries,
+  CandlestickData,
+  UTCTimestamp,
+} from "lightweight-charts";
 
 type Interval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
@@ -31,13 +36,14 @@ export default function EthKlineChart() {
       timeScale: { borderVisible: false },
     });
 
-    const series = chart.addCandlestickSeries({
-      upColor: "#22c55e",
-      downColor: "#ef4444",
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
-      borderVisible: false,
-    });
+const series = chart.addSeries(CandlestickSeries, {
+  upColor: "#22c55e",
+  downColor: "#ef4444",
+  wickUpColor: "#22c55e",
+  wickDownColor: "#ef4444",
+  borderVisible: false,
+});
+
 
     chartRef.current = chart;
     seriesRef.current = series;
